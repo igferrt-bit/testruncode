@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RunCode — 온라인 컴파일러</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAOLah7yjFFcDnCp2bPtUPwi2L4kwHLUrI",
+  authDomain: "my-runcode.firebaseapp.com",
+  projectId: "my-runcode",
+  storageBucket: "my-runcode.firebasestorage.app",
+  messagingSenderId: "997511197789",
+  appId: "1:997511197789:web:4fb7233a917f0bde95c9b4"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+window._db = db;
+window._fbFns = { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy };
+window._firebaseReady = true;
+window.dispatchEvent(new Event('firebase-ready'));
+</script>
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --border: #e8e5e0;
+    --text: #1a1917;
+    --muted: #8a8680;
+    --accent: #2563eb;
+    --accent-light: #eff6ff;
+    --success: #16a34a;
+    --error: #dc2626;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --radius: 10px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .logo { font-family: var(--mono); font-weight: 500; font-size: 18px; letter-spacing: -0.5px; color: var(--text); text-decoration: none; }
+  .logo span { color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+
+  .lang-tabs { display: flex; gap: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+  .lang-tab { padding: 5px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; font-family: var(--sans); cursor: pointer; border: none; background: transparent; color: var(--muted); transition: all 0.15s; }
+  .lang-tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  .lang-tab:hover:not(.active) { color: var(--text); }
+
+  .btn-header { display: flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 7px; font-size: 13px; font-weight: 500; font-family: var(--sans); cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text); transition: all 0.15s; white-space: nowrap; }
+  .btn-header:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-header.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-header.primary:hover { background: #1d4ed8; color: #fff; }
+  .btn-header.save-btn { border-color: #16a34a; color: #16a34a; }
+  .btn-header.save-btn:hover { background: #f0fdf4; }
+  .btn-header.logout { border-color: transparent; color: var(--muted); }
+  .btn-header.logout:hover { color: var(--error); border-color: var(--error); background: #fff1f1; }
+
+  main { flex: 1; display: flex; flex-direction: column; padding: 20px 24px; gap: 16px; max-width: 1400px; width: 100%; margin: 0 auto; }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .toolbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  select.saved-select { padding: 7px 12px; border-radius: 7px; border: 1px solid var(--border); background: #fffbeb; font-family: var(--sans); font-size: 13px; color: var(--text); cursor: pointer; outline: none; transition: border-color 0.15s; max-width: 220px; }
+  select.saved-select:focus { border-color: var(--accent); }
+
+  .btn-run { display: flex; align-items: center; gap: 7px; padding: 8px 20px; border-radius: 7px; font-size: 14px; font-weight: 600; font-family: var(--sans); cursor: pointer; border: none; background: var(--accent); color: #fff; transition: all 0.15s; white-space: nowrap; }
+  .btn-run:hover { background: #1d4ed8; }
+  .btn-run:disabled { background: var(--muted); cursor: not-allowed; }
+  .btn-run .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; display: none; }
+  .btn-run.loading .spinner { display: block; }
+  .btn-run.loading .run-icon { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .workspace { display: grid; grid-template-columns: 1fr 360px; gap: 16px; flex: 1; min-height: 0; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+  .panel-header { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg); }
+  .panel-title { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .panel-actions { display: flex; gap: 6px; }
+  .btn-icon { width: 26px; height: 26px; border-radius: 5px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--muted); transition: all 0.15s; }
+  .btn-icon:hover { background: var(--border); color: var(--text); }
+  #editor-container { flex: 1; min-height: 400px; }
+  .side-panel { display: flex; flex-direction: column; gap: 16px; }
+  .io-panel { flex: 1; min-height: 160px; }
+  textarea.io-area { flex: 1; resize: none; border: none; outline: none; padding: 14px 16px; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--text); background: var(--surface); width: 100%; min-height: 120px; }
+  textarea.io-area::placeholder { color: var(--muted); }
+  .output-area { flex: 1; padding: 14px 16px; font-family: var(--mono); font-size: 13px; line-height: 1.6; overflow-y: auto; min-height: 160px; white-space: pre-wrap; word-break: break-all; }
+  .output-area.success { color: #1a1917; }
+  .output-area.error-output { color: var(--error); }
+  .output-area.idle { color: var(--muted); font-style: italic; }
+  .status-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; font-family: var(--mono); }
+  .status-badge.ok { background: #dcfce7; color: var(--success); }
+  .status-badge.err { background: #fee2e2; color: var(--error); }
+  .exec-info { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; backdrop-filter: blur(2px); }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: var(--surface); border-radius: 14px; padding: 36px 32px; width: 100%; max-width: 400px; box-shadow: var(--shadow-md); transform: translateY(12px); transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1); max-height: 90vh; overflow-y: auto; }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-title { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+  .modal-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
+  .field input { width: 100%; padding: 10px 13px; border-radius: 8px; border: 1px solid var(--border); font-family: var(--sans); font-size: 14px; color: var(--text); outline: none; transition: border-color 0.15s; background: var(--bg); }
+  .field input:focus { border-color: var(--accent); background: #fff; }
+  .login-error { font-size: 13px; color: var(--error); margin-bottom: 12px; min-height: 18px; }
+  .btn-modal { width: 100%; padding: 11px; border-radius: 8px; border: none; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; font-family: var(--sans); cursor: pointer; transition: background 0.15s; }
+  .btn-modal:hover { background: #1d4ed8; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-row .btn-modal { background: var(--success); }
+  .btn-row .btn-modal:hover { background: #15803d; }
+  .btn-row .btn-modal.cancel { background: #d1d5db; color: var(--text); }
+  .btn-row .btn-modal.cancel:hover { background: #9ca3af; color: #fff; }
+
+  .saved-list { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .saved-list-title { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 10px; }
+  .saved-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-radius: 7px; border: 1px solid var(--border); margin-bottom: 6px; cursor: pointer; transition: all 0.12s; background: var(--bg); }
+  .saved-item:hover { border-color: var(--accent); background: var(--accent-light); }
+  .saved-item-info { min-width: 0; flex: 1; }
+  .saved-item-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .saved-item-meta { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
+  .saved-item-del { width: 22px; height: 22px; border-radius: 4px; border: none; background: transparent; cursor: pointer; color: var(--muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.12s; }
+  .saved-item-del:hover { background: #fee2e2; color: var(--error); }
+  .saved-empty { font-size: 13px; color: var(--muted); font-style: italic; text-align: center; padding: 14px 0; }
+  .saved-loading { font-size: 13px; color: var(--muted); text-align: center; padding: 14px 0; }
+
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--text); color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); z-index: 999; pointer-events: none; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 800px) {
+    main { padding: 12px 14px; }
+    .workspace { grid-template-columns: 1fr; }
+    header { padding: 0 14px; gap: 8px; }
+    .lang-tab { padding: 5px 9px; font-size: 12px; }
+    .btn-header span { display: none; }
+    #editor-container { min-height: 300px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Login Modal -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal">
+    <div class="modal-title">로그인</div>
+    <div class="modal-sub">코드 저장 기능을 사용하려면 로그인이 필요합니다.</div>
+    <div class="field">
+      <label>아이디</label>
+      <input type="text" id="loginId" placeholder="아이디" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>비밀번호</label>
+      <input type="password" id="loginPw" placeholder="비밀번호" autocomplete="current-password">
+    </div>
+    <div class="login-error" id="loginError"></div>
+    <button class="btn-modal" onclick="submitLogin()">로그인</button>
+  </div>
+</div>
+
+<!-- Save Modal -->
+<div class="modal-overlay" id="saveModal">
+  <div class="modal">
+    <div class="modal-title">코드 저장</div>
+    <div class="modal-sub">이름을 입력하고 저장하세요. 어느 기기에서든 불러올 수 있습니다.</div>
+    <div class="field">
+      <label>저장 이름</label>
+      <input type="text" id="saveNameInput" placeholder="예: 피보나치 풀이" maxlength="40">
+    </div>
+    <div class="btn-row">
+      <button class="btn-modal" onclick="confirmSave()">저장하기</button>
+      <button class="btn-modal cancel" onclick="closeSaveModal()">닫기</button>
+    </div>
+    <div class="saved-list">
+      <div class="saved-list-title">저장된 코드 목록</div>
+      <div id="savedListContainer"><div class="saved-loading">불러오는 중...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<header>
+  <a class="logo" href="#">Run<span>Code</span></a>
+  <div class="header-right">
+    <div class="lang-tabs" id="langTabs">
+      <button class="lang-tab active" data-lang="c">C</button>
+      <button class="lang-tab" data-lang="python">Python</button>
+      <button class="lang-tab" data-lang="java">Java</button>
+    </div>
+    <button class="btn-header" onclick="shareCode()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      <span>공유</span>
+    </button>
+    <button class="btn-header primary" id="btnLoginOpen" onclick="openLoginModal()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>로그인</span>
+    </button>
+    <div id="loggedInArea" style="display:none;align-items:center;gap:8px;">
+      <span id="loggedUser" style="font-size:13px;color:var(--muted);font-family:var(--mono);"></span>
+      <button class="btn-header save-btn" onclick="openSaveModal()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <span>저장</span>
+      </button>
+      <button class="btn-header logout" onclick="logout()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span>로그아웃</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <select class="saved-select" id="savedSelect" onchange="loadSavedFromSelect()" style="display:none;">
+        <option value="">— 저장된 코드 불러오기 —</option>
+      </select>
+    </div>
+    <button class="btn-run" id="runBtn" onclick="runCode()">
+      <svg class="run-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+      <div class="spinner"></div>
+      실행
+    </button>
+  </div>
+
+  <div class="workspace">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" id="editorLabel">editor · c</span>
+        <div class="panel-actions">
+          <button class="btn-icon" title="초기화" onclick="resetCode()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+          </button>
+          <button class="btn-icon" title="코드 복사" onclick="copyCode()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="editor-container"></div>
+    </div>
+
+    <div class="side-panel">
+      <div class="panel io-panel">
+        <div class="panel-header">
+          <span class="panel-title">표준 입력 (stdin)</span>
+          <button class="btn-icon" onclick="document.getElementById('stdinArea').value=''">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <textarea class="io-area" id="stdinArea" placeholder="여기에 입력값을 입력하세요..."></textarea>
+      </div>
+      <div class="panel" style="flex:1.5;min-height:180px;">
+        <div class="panel-header">
+          <span class="panel-title">출력</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="exec-info" id="execInfo"></span>
+            <span class="status-badge" id="statusBadge" style="display:none;"></span>
+          </div>
+        </div>
+        <div class="output-area idle" id="outputArea">코드를 작성하고 실행 버튼을 누르세요.</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const PISTON_API  = 'https://emkc.org/api/v2/piston/execute';
+const CREDENTIALS = { id: 'scott', pw: 'tiger' };
+const COLLECTION  = 'snippets';
+
+// C++ 제거 — C, Python, Java 만
+const LANG_CONFIG = {
+  c:      { pistonLang: 'c',      pistonVer: '*', monacoLang: 'c',      label: 'c',      tag: 'C' },
+  python: { pistonLang: 'python', pistonVer: '*', monacoLang: 'python', label: 'python', tag: 'Python' },
+  java:   { pistonLang: 'java',   pistonVer: '*', monacoLang: 'java',   label: 'java',   tag: 'Java' },
+};
+
+// 언어별 기본 코드 (예제 선택 없이 탭 전환 시 보여줄 기본값)
+const DEFAULT_CODE = {
+  c:      `#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}`,
+  python: `print("Hello, World!")`,
+  java:   `public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}`,
+};
+
+let currentLang = 'c';
+let editor = null;
+let isLoggedIn = false;
+
+// ── Monaco ────────────────────────────────────────────────────
+require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } });
+require(['vs/editor/editor.main'], () => {
+  editor = monaco.editor.create(document.getElementById('editor-container'), {
+    value: DEFAULT_CODE.c, language: 'c', theme: 'vs',
+    fontSize: 14, fontFamily: "'DM Mono', monospace", lineHeight: 22,
+    minimap: { enabled: false }, scrollBeyondLastLine: false,
+    padding: { top: 16, bottom: 16 }, overviewRulerLanes: 0,
+    renderLineHighlight: 'line', lineNumbersMinChars: 3, folding: false, wordWrap: 'on',
+  });
+  const hash = location.hash.slice(1);
+  if (hash) {
+    try {
+      const data = JSON.parse(atob(hash));
+      if (data.lang && LANG_CONFIG[data.lang]) {
+        switchLang(data.lang); editor.setValue(data.code || '');
+        document.getElementById('stdinArea').value = data.stdin || '';
+      }
+    } catch(e) {}
+  }
+});
+
+// ── Language ──────────────────────────────────────────────────
+function switchLang(lang) {
+  currentLang = lang;
+  document.querySelectorAll('.lang-tab').forEach(t => t.classList.toggle('active', t.dataset.lang === lang));
+  document.getElementById('editorLabel').textContent = `editor · ${LANG_CONFIG[lang].label}`;
+  if (editor) {
+    monaco.editor.setModelLanguage(editor.getModel(), LANG_CONFIG[lang].monacoLang);
+    editor.setValue(DEFAULT_CODE[lang]);
+  }
+  clearOutput();
+}
+document.getElementById('langTabs').addEventListener('click', e => {
+  if (e.target.classList.contains('lang-tab')) switchLang(e.target.dataset.lang);
+});
+
+// ── Run ───────────────────────────────────────────────────────
+async function runCode() {
+  if (!editor) return;
+  const btn = document.getElementById('runBtn');
+  const output = document.getElementById('outputArea');
+  btn.classList.add('loading'); btn.disabled = true;
+  output.className = 'output-area idle'; output.textContent = '실행 중...';
+  document.getElementById('statusBadge').style.display = 'none';
+  document.getElementById('execInfo').textContent = '';
+  const cfg = LANG_CONFIG[currentLang];
+  const start = Date.now();
+  try {
+    const res = await fetch(PISTON_API, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language: cfg.pistonLang, version: cfg.pistonVer, files: [{ content: editor.getValue() }], stdin: document.getElementById('stdinArea').value }),
+    });
+    const data = await res.json();
+    const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+    const run = data.run; const compile = data.compile;
+    if (compile && compile.stderr) {
+      output.className = 'output-area error-output'; output.textContent = compile.stderr.trim(); showBadge('err', 'Error');
+    } else if (run.stderr && !run.stdout) {
+      output.className = 'output-area error-output'; output.textContent = run.stderr.trim(); showBadge('err', 'Error');
+    } else {
+      let text = run.stdout || '';
+      if (run.stderr) text += (text ? '\n\n[stderr]\n' : '') + run.stderr;
+      output.className = 'output-area success'; output.textContent = text || '(출력 없음)';
+      showBadge('ok', run.code === 0 ? 'OK' : `Exit ${run.code}`);
+    }
+    document.getElementById('execInfo').textContent = `${elapsed}s`;
+  } catch(err) {
+    output.className = 'output-area error-output';
+    output.textContent = '네트워크 오류: ' + err.message;
+    showBadge('err', 'Error');
+  }
+  btn.classList.remove('loading'); btn.disabled = false;
+}
+
+function showBadge(type, text) { const b = document.getElementById('statusBadge'); b.className = `status-badge ${type}`; b.textContent = text; b.style.display = ''; }
+function clearOutput() {
+  document.getElementById('outputArea').className = 'output-area idle';
+  document.getElementById('outputArea').textContent = '코드를 작성하고 실행 버튼을 누르세요.';
+  document.getElementById('statusBadge').style.display = 'none';
+  document.getElementById('execInfo').textContent = '';
+}
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runCode(); } });
+
+// ── Utilities ─────────────────────────────────────────────────
+function copyCode() { if (!editor) return; navigator.clipboard.writeText(editor.getValue()).then(() => showToast('코드 복사됨!')); }
+function resetCode() { if (!editor) return; editor.setValue(DEFAULT_CODE[currentLang]); clearOutput(); }
+function shareCode() {
+  if (!editor) return;
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify({ lang: currentLang, code: editor.getValue(), stdin: document.getElementById('stdinArea').value }))));
+  navigator.clipboard.writeText(location.origin + location.pathname + '#' + encoded).then(() => showToast('링크가 클립보드에 복사됐어요!'));
+}
+function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── Login ─────────────────────────────────────────────────────
+function openLoginModal() {
+  document.getElementById('loginId').value = ''; document.getElementById('loginPw').value = '';
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('loginModal').classList.add('open');
+  setTimeout(() => document.getElementById('loginId').focus(), 120);
+}
+function closeLoginModal() { document.getElementById('loginModal').classList.remove('open'); }
+function submitLogin() {
+  const id = document.getElementById('loginId').value.trim();
+  const pw = document.getElementById('loginPw').value;
+  if (id === CREDENTIALS.id && pw === CREDENTIALS.pw) {
+    isLoggedIn = true; closeLoginModal();
+    document.getElementById('btnLoginOpen').style.display = 'none';
+    document.getElementById('loggedInArea').style.display = 'flex';
+    document.getElementById('loggedUser').textContent = id;
+    document.getElementById('savedSelect').style.display = '';
+    loadSavedToSelect();
+    showToast(`환영합니다, ${id}! 🎉`);
+  } else {
+    document.getElementById('loginError').textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
+    document.getElementById('loginPw').value = ''; document.getElementById('loginPw').focus();
+  }
+}
+function logout() {
+  isLoggedIn = false;
+  document.getElementById('btnLoginOpen').style.display = '';
+  document.getElementById('loggedInArea').style.display = 'none';
+  document.getElementById('savedSelect').style.display = 'none';
+  showToast('로그아웃됐습니다.');
+}
+document.getElementById('loginId').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPw').focus(); });
+document.getElementById('loginPw').addEventListener('keydown', e => { if (e.key === 'Enter') submitLogin(); });
+document.getElementById('loginModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeLoginModal(); });
+document.getElementById('saveModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeSaveModal(); });
+
+// ── Firebase ──────────────────────────────────────────────────
+function waitFirebase() {
+  return new Promise(resolve => {
+    if (window._firebaseReady) { resolve(); return; }
+    window.addEventListener('firebase-ready', () => resolve(), { once: true });
+  });
+}
+
+async function openSaveModal() {
+  if (!isLoggedIn) { openLoginModal(); return; }
+  document.getElementById('saveNameInput').value = '';
+  document.getElementById('saveModal').classList.add('open');
+  setTimeout(() => document.getElementById('saveNameInput').focus(), 120);
+  await renderSavedList();
+}
+function closeSaveModal() { document.getElementById('saveModal').classList.remove('open'); }
+
+async function confirmSave() {
+  const name = document.getElementById('saveNameInput').value.trim();
+  if (!name) { showToast('저장 이름을 입력하세요.'); return; }
+  if (!editor) return;
+  await waitFirebase();
+  const { collection, addDoc } = window._fbFns;
+  try {
+    await addDoc(collection(window._db, COLLECTION), {
+      name, lang: currentLang,
+      code: editor.getValue(),
+      stdin: document.getElementById('stdinArea').value,
+      savedAt: new Date().toISOString(),
+    });
+    document.getElementById('saveNameInput').value = '';
+    showToast(`"${name}" 저장됐어요! ☁️`);
+    await renderSavedList();
+    await loadSavedToSelect();
+  } catch(e) { showToast('저장 실패: ' + e.message); }
+}
+document.getElementById('saveNameInput').addEventListener('keydown', e => { if (e.key === 'Enter') confirmSave(); });
+
+async function renderSavedList() {
+  const container = document.getElementById('savedListContainer');
+  container.innerHTML = '<div class="saved-loading">불러오는 중... ☁️</div>';
+  await waitFirebase();
+  const { collection, getDocs, query, orderBy } = window._fbFns;
+  try {
+    const q = query(collection(window._db, COLLECTION), orderBy('savedAt', 'desc'));
+    const snap = await getDocs(q);
+    if (snap.empty) { container.innerHTML = '<div class="saved-empty">저장된 코드가 없습니다.</div>'; return; }
+    const items = [];
+    snap.forEach(d => items.push({ id: d.id, ...d.data() }));
+    // C++ 항목은 목록에서 숨김 (기존 저장 데이터 보호)
+    const filtered = items.filter(i => i.lang !== 'cpp');
+    if (filtered.length === 0) { container.innerHTML = '<div class="saved-empty">저장된 코드가 없습니다.</div>'; return; }
+    container.innerHTML = filtered.map(item => {
+      const tag = LANG_CONFIG[item.lang] ? LANG_CONFIG[item.lang].tag : item.lang.toUpperCase();
+      return `
+      <div class="saved-item" onclick="loadSavedItem('${item.id}','${item.lang}',${JSON.stringify(item.code)},${JSON.stringify(item.stdin||'')})">
+        <div class="saved-item-info">
+          <div class="saved-item-name">${escapeHtml(item.name)}</div>
+          <div class="saved-item-meta">[${tag}] · ${new Date(item.savedAt).toLocaleDateString('ko-KR')}</div>
+        </div>
+        <button class="saved-item-del" onclick="deleteSavedItem(event,'${item.id}')" title="삭제">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>`;
+    }).join('');
+  } catch(e) { container.innerHTML = `<div class="saved-empty">오류: ${e.message}</div>`; }
+}
+
+window.loadSavedItem = function(id, lang, code, stdin) {
+  if (!editor || !LANG_CONFIG[lang]) return;
+  switchLang(lang); editor.setValue(code);
+  document.getElementById('stdinArea').value = stdin || '';
+  clearOutput(); closeSaveModal();
+  showToast('코드를 불러왔습니다.');
+};
+
+window.deleteSavedItem = async function(e, id) {
+  e.stopPropagation();
+  await waitFirebase();
+  const { deleteDoc, doc } = window._fbFns;
+  try {
+    await deleteDoc(doc(window._db, COLLECTION, id));
+    showToast('삭제됐습니다.');
+    await renderSavedList();
+    await loadSavedToSelect();
+  } catch(err) { showToast('삭제 실패: ' + err.message); }
+};
+
+async function loadSavedToSelect() {
+  await waitFirebase();
+  const { collection, getDocs, query, orderBy } = window._fbFns;
+  const sel = document.getElementById('savedSelect');
+  sel.innerHTML = '<option value="">— 저장된 코드 불러오기 —</option>';
+  try {
+    const q = query(collection(window._db, COLLECTION), orderBy('savedAt', 'desc'));
+    const snap = await getDocs(q);
+    snap.forEach(d => {
+      const data = d.data();
+      if (data.lang === 'cpp') return; // C++ 제외
+      if (!LANG_CONFIG[data.lang]) return;
+      const tag = LANG_CONFIG[data.lang].tag;
+      const o = document.createElement('option');
+      o.value = d.id;
+      o.dataset.lang = data.lang;
+      o.dataset.code = data.code;
+      o.dataset.stdin = data.stdin || '';
+      o.textContent = `[${tag}] ${data.name}`;
+      sel.appendChild(o);
+    });
+  } catch(e) {}
+}
+
+function loadSavedFromSelect() {
+  const sel = document.getElementById('savedSelect');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+  window.loadSavedItem(opt.value, opt.dataset.lang, opt.dataset.code, opt.dataset.stdin);
+  sel.value = '';
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2300);
+}
+</script>
+</body>
+</html>
