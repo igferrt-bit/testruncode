@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RunCode — 온라인 컴파일러</title>
+<title>RunCode — 코드 노트</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
@@ -69,19 +69,10 @@ window.dispatchEvent(new Event('firebase-ready'));
 
   main { flex: 1; display: flex; flex-direction: column; padding: 20px 24px; gap: 16px; max-width: 1400px; width: 100%; margin: 0 auto; }
 
-  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-  .toolbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .toolbar { display: flex; align-items: center; justify-content: flex-start; gap: 12px; flex-wrap: wrap; }
 
   select.saved-select { padding: 7px 12px; border-radius: 7px; border: 1px solid var(--border); background: #fffbeb; font-family: var(--sans); font-size: 13px; color: var(--text); cursor: pointer; outline: none; transition: border-color 0.15s; max-width: 220px; }
   select.saved-select:focus { border-color: var(--accent); }
-
-  .btn-run { display: flex; align-items: center; gap: 7px; padding: 8px 20px; border-radius: 7px; font-size: 14px; font-weight: 600; font-family: var(--sans); cursor: pointer; border: none; background: var(--accent); color: #fff; transition: all 0.15s; white-space: nowrap; }
-  .btn-run:hover { background: #1d4ed8; }
-  .btn-run:disabled { background: var(--muted); cursor: not-allowed; }
-  .btn-run .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; display: none; }
-  .btn-run.loading .spinner { display: block; }
-  .btn-run.loading .run-icon { display: none; }
-  @keyframes spin { to { transform: rotate(360deg); } }
 
   .workspace { display: grid; grid-template-columns: 1fr 360px; gap: 16px; flex: 1; min-height: 0; }
   .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
@@ -95,14 +86,8 @@ window.dispatchEvent(new Event('firebase-ready'));
   .io-panel { flex: 1; min-height: 160px; }
   textarea.io-area { flex: 1; resize: none; border: none; outline: none; padding: 14px 16px; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--text); background: var(--surface); width: 100%; min-height: 120px; }
   textarea.io-area::placeholder { color: var(--muted); }
-  .output-area { flex: 1; padding: 14px 16px; font-family: var(--mono); font-size: 13px; line-height: 1.6; overflow-y: auto; min-height: 160px; white-space: pre-wrap; word-break: break-all; }
-  .output-area.success { color: #1a1917; }
-  .output-area.error-output { color: var(--error); }
-  .output-area.idle { color: var(--muted); font-style: italic; }
-  .status-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; font-family: var(--mono); }
-  .status-badge.ok { background: #dcfce7; color: var(--success); }
-  .status-badge.err { background: #fee2e2; color: var(--error); }
-  .exec-info { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  textarea.answer-area { background: #f0fdf4; color: var(--success); }
+  textarea.answer-area::placeholder { color: #86efac; }
 
   /* Modal */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; backdrop-filter: blur(2px); }
@@ -198,10 +183,6 @@ window.dispatchEvent(new Event('firebase-ready'));
       <button class="lang-tab" data-lang="python">Python</button>
       <button class="lang-tab" data-lang="java">Java</button>
     </div>
-    <button class="btn-header" onclick="shareCode()">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-      <span>공유</span>
-    </button>
     <button class="btn-header primary" id="btnLoginOpen" onclick="openLoginModal()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       <span>로그인</span>
@@ -222,16 +203,9 @@ window.dispatchEvent(new Event('firebase-ready'));
 
 <main>
   <div class="toolbar">
-    <div class="toolbar-left">
-      <select class="saved-select" id="savedSelect" onchange="loadSavedFromSelect()" style="display:none;">
-        <option value="">— 저장된 코드 불러오기 —</option>
-      </select>
-    </div>
-    <button class="btn-run" id="runBtn" onclick="runCode()">
-      <svg class="run-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-      <div class="spinner"></div>
-      실행
-    </button>
+    <select class="saved-select" id="savedSelect" onchange="loadSavedFromSelect()" style="display:none;">
+      <option value="">— 저장된 코드 불러오기 —</option>
+    </select>
   </div>
 
   <div class="workspace">
@@ -253,22 +227,21 @@ window.dispatchEvent(new Event('firebase-ready'));
     <div class="side-panel">
       <div class="panel io-panel">
         <div class="panel-header">
-          <span class="panel-title">표준 입력 (stdin)</span>
-          <button class="btn-icon" onclick="document.getElementById('stdinArea').value=''">
+          <span class="panel-title">설명</span>
+          <button class="btn-icon" onclick="document.getElementById('descArea').value=''">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <textarea class="io-area" id="stdinArea" placeholder="여기에 입력값을 입력하세요..."></textarea>
+        <textarea class="io-area" id="descArea" placeholder="코드 설명을 입력하세요..."></textarea>
       </div>
       <div class="panel" style="flex:1.5;min-height:180px;">
         <div class="panel-header">
-          <span class="panel-title">출력</span>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span class="exec-info" id="execInfo"></span>
-            <span class="status-badge" id="statusBadge" style="display:none;"></span>
-          </div>
+          <span class="panel-title">정답</span>
+          <button class="btn-icon" onclick="document.getElementById('answerArea').value=''">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
-        <div class="output-area idle" id="outputArea">코드를 작성하고 실행 버튼을 누르세요.</div>
+        <textarea class="io-area answer-area" id="answerArea" placeholder="정답을 입력하세요..."></textarea>
       </div>
     </div>
   </div>
@@ -277,18 +250,15 @@ window.dispatchEvent(new Event('firebase-ready'));
 <div class="toast" id="toast"></div>
 
 <script>
-const PISTON_API  = 'https://color-enquiry-channels-designs.trycloudflare.com/api/run';
 const CREDENTIALS = { id: 'scott', pw: 'tiger' };
 const COLLECTION  = 'snippets';
 
-// C++ 제거 — C, Python, Java 만
 const LANG_CONFIG = {
-  c:      { pistonLang: 'c',      pistonVer: '*', monacoLang: 'c',      label: 'c',      tag: 'C' },
-  python: { pistonLang: 'python', pistonVer: '*', monacoLang: 'python', label: 'python', tag: 'Python' },
-  java:   { pistonLang: 'java',   pistonVer: '*', monacoLang: 'java',   label: 'java',   tag: 'Java' },
+  c:      { monacoLang: 'c',      label: 'c',      tag: 'C' },
+  python: { monacoLang: 'python', label: 'python', tag: 'Python' },
+  java:   { monacoLang: 'java',   label: 'java',   tag: 'Java' },
 };
 
-// 언어별 기본 코드 (예제 선택 없이 탭 전환 시 보여줄 기본값)
 const DEFAULT_CODE = {
   c:      `#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}`,
   python: `print("Hello, World!")`,
@@ -309,16 +279,6 @@ require(['vs/editor/editor.main'], () => {
     padding: { top: 16, bottom: 16 }, overviewRulerLanes: 0,
     renderLineHighlight: 'line', lineNumbersMinChars: 3, folding: false, wordWrap: 'on',
   });
-  const hash = location.hash.slice(1);
-  if (hash) {
-    try {
-      const data = JSON.parse(atob(hash));
-      if (data.lang && LANG_CONFIG[data.lang]) {
-        switchLang(data.lang); editor.setValue(data.code || '');
-        document.getElementById('stdinArea').value = data.stdin || '';
-      }
-    } catch(e) {}
-  }
 });
 
 // ── Language ──────────────────────────────────────────────────
@@ -330,104 +290,14 @@ function switchLang(lang) {
     monaco.editor.setModelLanguage(editor.getModel(), LANG_CONFIG[lang].monacoLang);
     editor.setValue(DEFAULT_CODE[lang]);
   }
-  clearOutput();
 }
 document.getElementById('langTabs').addEventListener('click', e => {
   if (e.target.classList.contains('lang-tab')) switchLang(e.target.dataset.lang);
 });
 
-// ── Run ───────────────────────────────────────────────────────
-async function runCode() {
-  if (!editor) return;
-  const btn = document.getElementById('runBtn');
-  const output = document.getElementById('outputArea');
-  btn.classList.add('loading'); btn.disabled = true;
-  output.className = 'output-area idle'; output.textContent = '실행 중...';
-  document.getElementById('statusBadge').style.display = 'none';
-  document.getElementById('execInfo').textContent = '';
-
-  const cfg = LANG_CONFIG[currentLang];
-  const payload = {
-    language: cfg.pistonLang,
-    version: cfg.pistonVer,
-    files: [{ content: editor.getValue() }],
-    stdin: document.getElementById('stdinArea').value,
-  };
-  const start = Date.now();
-
-  // 최대 2번 시도 (첫 번째 실패 시 자동 재시도)
-  let lastError = null;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      if (attempt === 2) output.textContent = '재시도 중... (1회)';
-      const res = await fetch(PISTON_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(15000), // 15초 타임아웃
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const data = await res.json();
-      const elapsed = ((Date.now() - start) / 1000).toFixed(2);
-      const run = data.run;
-      const compile = data.compile;
-
-      // run이 없으면 API 응답 오류
-      if (!run) throw new Error('API 응답 오류 (run 없음)');
-
-      if (compile && compile.stderr) {
-        output.className = 'output-area error-output';
-        output.textContent = compile.stderr.trim();
-        showBadge('err', 'Error');
-      } else if (run.stderr && !run.stdout) {
-        output.className = 'output-area error-output';
-        output.textContent = run.stderr.trim();
-        showBadge('err', 'Error');
-      } else {
-        let text = run.stdout || '';
-        if (run.stderr) text += (text ? '\n\n[stderr]\n' : '') + run.stderr;
-        output.className = 'output-area success';
-        output.textContent = text || '(출력 없음)';
-        showBadge('ok', run.code === 0 ? 'OK' : `Exit ${run.code}`);
-      }
-      document.getElementById('execInfo').textContent = `${elapsed}s`;
-      lastError = null;
-      break; // 성공 시 루프 탈출
-
-    } catch(err) {
-      lastError = err;
-      if (attempt < 2) await new Promise(r => setTimeout(r, 1500)); // 1.5초 대기 후 재시도
-    }
-  }
-
-  if (lastError) {
-    output.className = 'output-area error-output';
-    output.textContent = '실행 실패: Piston API 서버에 연결할 수 없습니다.\n잠시 후 다시 시도해주세요.\n\n(' + lastError.message + ')';
-    showBadge('err', 'Error');
-  }
-
-  btn.classList.remove('loading'); btn.disabled = false;
-}
-
-function showBadge(type, text) { const b = document.getElementById('statusBadge'); b.className = `status-badge ${type}`; b.textContent = text; b.style.display = ''; }
-function clearOutput() {
-  document.getElementById('outputArea').className = 'output-area idle';
-  document.getElementById('outputArea').textContent = '코드를 작성하고 실행 버튼을 누르세요.';
-  document.getElementById('statusBadge').style.display = 'none';
-  document.getElementById('execInfo').textContent = '';
-}
-document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runCode(); } });
-
 // ── Utilities ─────────────────────────────────────────────────
 function copyCode() { if (!editor) return; navigator.clipboard.writeText(editor.getValue()).then(() => showToast('코드 복사됨!')); }
-function resetCode() { if (!editor) return; editor.setValue(DEFAULT_CODE[currentLang]); clearOutput(); }
-function shareCode() {
-  if (!editor) return;
-  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify({ lang: currentLang, code: editor.getValue(), stdin: document.getElementById('stdinArea').value }))));
-  navigator.clipboard.writeText(location.origin + location.pathname + '#' + encoded).then(() => showToast('링크가 클립보드에 복사됐어요!'));
-}
+function resetCode() { if (!editor) return; editor.setValue(DEFAULT_CODE[currentLang]); }
 function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── Login ─────────────────────────────────────────────────────
@@ -493,7 +363,8 @@ async function confirmSave() {
     await addDoc(collection(window._db, COLLECTION), {
       name, lang: currentLang,
       code: editor.getValue(),
-      stdin: document.getElementById('stdinArea').value,
+      desc: document.getElementById('descArea').value,
+      answer: document.getElementById('answerArea').value,
       savedAt: new Date().toISOString(),
     });
     document.getElementById('saveNameInput').value = '';
@@ -515,13 +386,12 @@ async function renderSavedList() {
     if (snap.empty) { container.innerHTML = '<div class="saved-empty">저장된 코드가 없습니다.</div>'; return; }
     const items = [];
     snap.forEach(d => items.push({ id: d.id, ...d.data() }));
-    // C++ 항목은 목록에서 숨김 (기존 저장 데이터 보호)
     const filtered = items.filter(i => i.lang !== 'cpp');
     if (filtered.length === 0) { container.innerHTML = '<div class="saved-empty">저장된 코드가 없습니다.</div>'; return; }
     container.innerHTML = filtered.map(item => {
       const tag = LANG_CONFIG[item.lang] ? LANG_CONFIG[item.lang].tag : item.lang.toUpperCase();
       return `
-      <div class="saved-item" onclick="loadSavedItem('${item.id}','${item.lang}',${JSON.stringify(item.code)},${JSON.stringify(item.stdin||'')})">
+      <div class="saved-item" onclick="loadSavedItem('${item.id}','${item.lang}',${JSON.stringify(item.code)},${JSON.stringify(item.desc||'')},${JSON.stringify(item.answer||'')})">
         <div class="saved-item-info">
           <div class="saved-item-name">${escapeHtml(item.name)}</div>
           <div class="saved-item-meta">[${tag}] · ${new Date(item.savedAt).toLocaleDateString('ko-KR')}</div>
@@ -534,11 +404,12 @@ async function renderSavedList() {
   } catch(e) { container.innerHTML = `<div class="saved-empty">오류: ${e.message}</div>`; }
 }
 
-window.loadSavedItem = function(id, lang, code, stdin) {
+window.loadSavedItem = function(id, lang, code, desc, answer) {
   if (!editor || !LANG_CONFIG[lang]) return;
   switchLang(lang); editor.setValue(code);
-  document.getElementById('stdinArea').value = stdin || '';
-  clearOutput(); closeSaveModal();
+  document.getElementById('descArea').value = desc || '';
+  document.getElementById('answerArea').value = answer || '';
+  closeSaveModal();
   showToast('코드를 불러왔습니다.');
 };
 
@@ -564,14 +435,15 @@ async function loadSavedToSelect() {
     const snap = await getDocs(q);
     snap.forEach(d => {
       const data = d.data();
-      if (data.lang === 'cpp') return; // C++ 제외
+      if (data.lang === 'cpp') return;
       if (!LANG_CONFIG[data.lang]) return;
       const tag = LANG_CONFIG[data.lang].tag;
       const o = document.createElement('option');
       o.value = d.id;
       o.dataset.lang = data.lang;
       o.dataset.code = data.code;
-      o.dataset.stdin = data.stdin || '';
+      o.dataset.desc = data.desc || '';
+      o.dataset.answer = data.answer || '';
       o.textContent = `[${tag}] ${data.name}`;
       sel.appendChild(o);
     });
@@ -582,7 +454,7 @@ function loadSavedFromSelect() {
   const sel = document.getElementById('savedSelect');
   const opt = sel.options[sel.selectedIndex];
   if (!opt || !opt.value) return;
-  window.loadSavedItem(opt.value, opt.dataset.lang, opt.dataset.code, opt.dataset.stdin);
+  window.loadSavedItem(opt.value, opt.dataset.lang, opt.dataset.code, opt.dataset.desc, opt.dataset.answer);
   sel.value = '';
 }
 
