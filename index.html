@@ -264,18 +264,33 @@ async function runCode() {
         "files": [{ "content": editor.getValue() }]
       })
     });
+    
     const data = await response.json();
-    const result = data.run.output || data.run.stderr || "결과 없음";
-    out.textContent = result;
-    out.style.color = data.run.stderr ? "#f87171" : "#4ade80";
+    
+    // 1. 컴파일 단계에서 에러가 난 경우 (C, Java 등)
+    if (data.compile && data.compile.stderr) {
+        out.textContent = "컴파일 에러:\n" + data.compile.stderr;
+        out.style.color = "#f87171";
+    } 
+    // 2. 실행 단계 결과 확인
+    else if (data.run) {
+        const result = data.run.output || data.run.stdout || data.run.stderr || "실행 결과가 없습니다.";
+        out.textContent = result;
+        out.style.color = data.run.stderr ? "#f87171" : "#4ade80";
+    } 
+    // 3. 알 수 없는 응답 구조일 때
+    else {
+        out.textContent = "API 응답 오류: 데이터를 불러올 수 없습니다.";
+        out.style.color = "#f87171";
+        console.log("Full Data:", data); // 디버깅용
+    }
   } catch (e) {
-    out.textContent = "오류: " + e.message;
+    out.textContent = "네트워크 오류: " + e.message;
     out.style.color = "#f87171";
   } finally {
     btn.disabled = false;
   }
 }
-
 // ── Firebase Helpers ──────────────────────────────────────────
 function waitFirebase() {
   return new Promise(res => { if(window._firebaseReady) res(); else window.addEventListener('firebase-ready', res, {once:true}); });
